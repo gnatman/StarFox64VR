@@ -63,6 +63,9 @@ std::vector<uint8_t*> MemoryPool;
 GameEngine* GameEngine::Instance;
 
 GameEngine::GameEngine() {
+#ifdef _WIN32
+    SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "0");
+#endif
     // Initialize context properties early to recognize paths properly for non-portable builds
     this->context = Ship::Context::CreateUninitializedInstance("Starship", "ship", "starship.cfg.json");
 

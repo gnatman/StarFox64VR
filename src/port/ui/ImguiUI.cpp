@@ -11,6 +11,7 @@
 #include <libultraship/libultraship.h>
 #include <Fast3D/interpreter.h>
 #include "port/Engine.h"
+#include "port/MotionCueing.h"
 #include "port/notification/notification.h"
 #include "utils/StringHelper.h"
 
@@ -362,6 +363,128 @@ void DrawSettingsMenu(){
             ImGui::EndMenu();
         }
 
+        UIWidgets::Spacer(0);
+
+        if (UIWidgets::BeginMenu("Telemetry")) {
+            UIWidgets::CVarCheckbox("Enable UDP Telemetry", "gTelemetry.Enabled", {
+                .tooltip = "Broadcasts motion simulator telemetry via UDP (SimHub / FlyPT / Motion Platform)"
+            });
+
+            UIWidgets::Spacer(0);
+
+            static int portVal = CVarGetInteger("gTelemetry.Port", 20777);
+            if (ImGui::InputInt("UDP Port", &portVal)) {
+                if (portVal < 1024) portVal = 1024;
+                if (portVal > 65535) portVal = 65535;
+                CVarSetInteger("gTelemetry.Port", portVal);
+                CVarSave();
+            }
+
+            UIWidgets::Spacer(0);
+            ImGui::Separator();
+            ImGui::Text("Motion Cueing (DOF Reality P6)");
+
+            UIWidgets::CVarSliderFloat("Overall Intensity", "gTelemetry.Cue.Intensity", 0.0f, 2.0f, 1.0f, {
+                .tooltip = "Master scaling multiplier for all cue angles and accelerations."
+            });
+            UIWidgets::CVarSliderFloat("Rig Safety Limit", "gTelemetry.Cue.RigLimit", 5.0f, 16.0f, 16.0f, {
+                .tooltip = "Absolute maximum tilt angle sent to the rig (capped at 16 degrees).",
+                .format = "%.1f deg"
+            });
+
+            UIWidgets::Spacer(0);
+            ImGui::TextDisabled("Angles & Washout");
+            UIWidgets::CVarSliderFloat("Max Bank Angle", "gTelemetry.Cue.MaxRoll", 2.0f, 16.0f, 12.0f, {
+                .tooltip = "Soft-limited peak roll during steady turns and Z/R banking.",
+                .format = "%.1f deg"
+            });
+            UIWidgets::CVarSliderFloat("Max Pitch Angle", "gTelemetry.Cue.MaxPitch", 2.0f, 16.0f, 10.0f, {
+                .tooltip = "Soft-limited peak pitch angle during stick climb/dive.",
+                .format = "%.1f deg"
+            });
+            UIWidgets::CVarSliderFloat("Max Yaw Angle", "gTelemetry.Cue.MaxYaw", 0.0f, 16.0f, 8.0f, {
+                .tooltip = "Soft-limited peak yaw cue during sustained turns.",
+                .format = "%.1f deg"
+            });
+            UIWidgets::CVarSliderFloat("Sustained Bank Fraction", "gTelemetry.Cue.SustainedFraction", 0.0f, 1.0f, 0.5f, {
+                .tooltip = "Share of bank/pitch maintained after washout (0.5 = settles back to 50% lean).",
+                .format = "%.2f"
+            });
+            UIWidgets::CVarSliderFloat("Bank Washout Time", "gTelemetry.Cue.BankWashoutSec", 0.5f, 10.0f, 3.0f, {
+                .tooltip = "How gradually sustained banks ease back toward center.",
+                .format = "%.1f s"
+            });
+            UIWidgets::CVarSliderFloat("Yaw Washout Time", "gTelemetry.Cue.YawWashoutSec", 0.2f, 5.0f, 1.5f, {
+                .tooltip = "How quickly yaw returns to center when turning finishes.",
+                .format = "%.1f s"
+            });
+
+            UIWidgets::Spacer(0);
+            ImGui::TextDisabled("Maneuver Cues");
+            UIWidgets::CVarSliderFloat("Barrel Roll Kick", "gTelemetry.Cue.BarrelRollKick", 0.0f, 12.0f, 6.0f, {
+                .tooltip = "Impulse roll tilt on double-tap barrel roll.",
+                .format = "%.1f deg"
+            });
+            UIWidgets::CVarSliderFloat("Barrel Roll Sway", "gTelemetry.Cue.BarrelRollSway", 0.0f, 15.0f, 6.0f, {
+                .tooltip = "Lateral sway jolt during barrel roll.",
+                .format = "%.1f m/s2"
+            });
+            UIWidgets::CVarSliderFloat("Loop Pitch Tilt", "gTelemetry.Cue.LoopPitch", 0.0f, 14.0f, 8.0f, {
+                .tooltip = "Nose-up pitch during somersaults and U-turns (instead of full 360 loop).",
+                .format = "%.1f deg"
+            });
+            UIWidgets::CVarSliderFloat("Loop Heave (G-Load)", "gTelemetry.Cue.LoopHeave", 0.0f, 15.0f, 6.0f, {
+                .tooltip = "Upward heave sensation during somersaults and U-turns.",
+                .format = "%.1f m/s2"
+            });
+            UIWidgets::CVarSliderFloat("Damage Hit Jolt", "gTelemetry.Cue.HitJolt", 0.0f, 15.0f, 6.0f, {
+                .tooltip = "Sudden impulse jolt upon receiving damage.",
+                .format = "%.1f m/s2"
+            });
+            UIWidgets::CVarSliderFloat("Max Slew Rate", "gTelemetry.Cue.SlewDegPerSec", 15.0f, 180.0f, 60.0f, {
+                .tooltip = "Maximum speed the rig tilt angles are allowed to change.",
+                .format = "%.0f deg/s"
+            });
+
+            UIWidgets::Spacer(0);
+            ImGui::TextDisabled("Inversions");
+            UIWidgets::CVarCheckbox("Invert Roll", "gTelemetry.Cue.InvertRoll");
+            UIWidgets::CVarCheckbox("Invert Pitch", "gTelemetry.Cue.InvertPitch");
+            UIWidgets::CVarCheckbox("Invert Yaw", "gTelemetry.Cue.InvertYaw");
+
+            UIWidgets::Spacer(0);
+            if (ImGui::Button("Reset Motion Defaults")) {
+                CVarClear("gTelemetry.Cue.Intensity");
+                CVarClear("gTelemetry.Cue.RigLimit");
+                CVarClear("gTelemetry.Cue.MaxRoll");
+                CVarClear("gTelemetry.Cue.MaxPitch");
+                CVarClear("gTelemetry.Cue.MaxYaw");
+                CVarClear("gTelemetry.Cue.SustainedFraction");
+                CVarClear("gTelemetry.Cue.BankWashoutSec");
+                CVarClear("gTelemetry.Cue.YawWashoutSec");
+                CVarClear("gTelemetry.Cue.BarrelRollKick");
+                CVarClear("gTelemetry.Cue.BarrelRollSway");
+                CVarClear("gTelemetry.Cue.LoopPitch");
+                CVarClear("gTelemetry.Cue.LoopHeave");
+                CVarClear("gTelemetry.Cue.HitJolt");
+                CVarClear("gTelemetry.Cue.SlewDegPerSec");
+                CVarClear("gTelemetry.Cue.InvertRoll");
+                CVarClear("gTelemetry.Cue.InvertPitch");
+                CVarClear("gTelemetry.Cue.InvertYaw");
+                CVarSave();
+            }
+
+            const auto& lastCue = MotionCueing_GetLastOutput();
+            ImGui::Separator();
+            ImGui::Text("Live Rig Cue Output:");
+            ImGui::Text("Roll: %+.1f deg | Pitch: %+.1f deg | Yaw: %+.1f deg",
+                        lastCue.roll, lastCue.pitch, lastCue.yaw);
+            ImGui::Text("Surge: %+.1f | Sway: %+.1f | Heave: %+.1f m/s2",
+                        lastCue.surge, lastCue.sway, lastCue.heave);
+
+            ImGui::EndMenu();
+        }
+
         ImGui::EndMenu();
     }
 
@@ -370,6 +493,57 @@ void DrawSettingsMenu(){
         UIWidgets::WindowButton("Resolution Editor", "gAdvancedResolutionEditorEnabled", GameUI::mAdvancedResolutionSettingsWindow);
 
         UIWidgets::Spacer(0);
+
+#ifdef ENABLE_VR
+        if (UIWidgets::BeginMenu("VR Virtual Screen & HUD")) {
+            UIWidgets::CVarSliderFloat("Screen Distance", "gVRHUDDistance", 0.5f, 5.0f, 1.5f, {
+                .tooltip = "Distance in meters of the 2D projected screen and HUD in VR.",
+                .format = "%.2f m"
+            });
+            UIWidgets::CVarSliderFloat("Screen Width", "gVRHUDWidth", 0.3f, 3.0f, 1.0f, {
+                .tooltip = "Width in meters of the 2D projected screen and HUD in VR.",
+                .format = "%.2f m"
+            });
+            ImGui::EndMenu();
+        }
+
+        if (UIWidgets::BeginMenu("VR Cockpit View")) {
+            UIWidgets::CVarSliderFloat("Cockpit Forward/Back", "gVRCockpitZ", -20.0f, 10.0f, -8.0f, {
+                .tooltip = "Forward/Back offset of the cockpit interior in VR. Lower values bring the dashboard closer to the pilot.",
+                .format = "%.1f"
+            });
+            UIWidgets::CVarSliderFloat("Cockpit Height", "gVRCockpitY", -15.0f, 5.0f, -4.0f, {
+                .tooltip = "Vertical height offset of the cockpit interior in VR.",
+                .format = "%.1f"
+            });
+            UIWidgets::CVarSliderFloat("Cockpit Scale", "gVRCockpitScale", 0.5f, 2.5f, 1.25f, {
+                .tooltip = "Scale of the cockpit interior model in VR.",
+                .format = "%.2fx"
+            });
+            UIWidgets::CVarSliderFloat("Canopy Glass Forward/Back", "gVRCanopyZ", -30.0f, 10.0f, -18.0f, {
+                .tooltip = "Forward/Back offset of the canopy glass in VR.",
+                .format = "%.1f"
+            });
+            UIWidgets::CVarSliderFloat("Canopy Glass Height", "gVRCanopyY", 0.0f, 25.0f, 13.0f, {
+                .tooltip = "Vertical height offset of the canopy glass in VR.",
+                .format = "%.1f"
+            });
+            UIWidgets::CVarSliderFloat("Canopy Glass Scale", "gVRCanopyScale", 0.5f, 3.5f, 2.0f, {
+                .tooltip = "Scale of the canopy glass in VR.",
+                .format = "%.2fx"
+            });
+            UIWidgets::CVarSliderInt("Canopy Glass Opacity", "gCockpitOpacity", 0, 255, 120, {
+                .tooltip = "Controls glass glare and reflection opacity (0 = 100% transparent/clear glass, 255 = fully opaque glare).",
+                .format = "%d"
+            });
+            UIWidgets::CVarCheckbox("Force Cockpit in All-Range Mode", "gVRForceCockpitAllRange", {
+                .tooltip = "Forces first-person cockpit camera and draws the cockpit interior during all-range mode sections."
+            });
+            ImGui::EndMenu();
+        }
+
+        UIWidgets::Spacer(0);
+#endif
 
         // Previously was running every frame, and nothing was setting it? Maybe a bad copy/paste?
         // Ship::Context::GetInstance()->GetWindow()->SetResolutionMultiplier(CVarGetFloat("gInternalResolution", 1));

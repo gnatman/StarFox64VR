@@ -188,8 +188,211 @@ static Gfx starSetupDL[] = {
 f32 gStarPrevX[3000];
 f32 gStarPrevY[3000];
 
+bool WindowIsVREnabled(void);
+extern Vec3f gPlayerCamUp;
+
+#define STAR3D_COUNT 1000
+#define STAR3D_BATCH_SIZE 8
+#define STAR3D_BATCHES (STAR3D_COUNT / STAR3D_BATCH_SIZE)
+
+static Vtx sStar3DVerts[STAR3D_COUNT * 4];
+static Gfx sStar3DDL[1 + (STAR3D_BATCHES * 9) + 1];
+static bool sStar3DInitialized = false;
+
+static Gfx star3DSetupDL[] = {
+    gsDPPipeSync(),
+    gsSPTexture(0xFFFF, 0xFFFF, 0, G_TX_RENDERTILE, G_OFF),
+    gsSPClearGeometryMode(G_ZBUFFER | G_CULL_BOTH | G_FOG | G_LIGHTING | G_TEXTURE_GEN |
+                          G_TEXTURE_GEN_LINEAR | G_LOD),
+    gsDPSetCombineMode(G_CC_SHADE, G_CC_SHADE),
+    gsSPSetGeometryMode(G_SHADE | G_SHADING_SMOOTH),
+    gsDPSetOtherMode(G_AD_NOTPATTERN | G_CD_MAGICSQ | G_CK_NONE | G_TC_FILT | G_TF_BILERP | G_TT_NONE | G_TL_TILE |
+                         G_TD_CLAMP | G_TP_PERSP | G_CYC_1CYCLE | G_PM_NPRIMITIVE,
+                     G_AC_NONE | G_ZS_PIXEL | G_RM_OPA_SURF | G_RM_OPA_SURF2),
+    gsSPEndDisplayList(),
+};
+
+static void Background_InitStarfield3D(void) {
+    static const u8 sStar3DColors[8][3] = {
+        { 255, 255, 255 }, // Brilliant White
+        { 220, 235, 255 }, // Blue-White
+        { 190, 215, 255 }, // Soft Blue
+        { 255, 250, 230 }, // Warm White
+        { 255, 240, 190 }, // Pale Yellow
+        { 255, 215, 170 }, // Light Orange
+        { 255, 190, 170 }, // Soft Red
+        { 200, 245, 255 }, // Cyan
+    };
+
+    const float R = 8500.0f;
+    const float goldenRatio = 2.39996322972865332f; // PI * (3.0 - sqrt(5.0))
+
+    for (int i = 0; i < STAR3D_COUNT; i++) {
+        // Fibonacci sphere point distribution with slight pseudo-random jitter
+        float y = 1.0f - ((2.0f * (float)i + 1.0f) / (float)STAR3D_COUNT);
+        float phi = (float)i * goldenRatio;
+
+        // Simple reproducible integer hash for per-star variety
+        u32 h = (u32)(i * 2654435761u);
+        h ^= (h >> 13);
+        h *= 1664525u;
+
+        // Jitter phi and y slightly to break regular spiral patterns
+        float jitterPhi = ((float)(h & 0xFF) / 255.0f - 0.5f) * 0.15f;
+        float jitterY = ((float)((h >> 8) & 0xFF) / 255.0f - 0.5f) * (0.8f / (float)STAR3D_COUNT);
+        phi += jitterPhi;
+        y += jitterY;
+        if (y > 0.999f) y = 0.999f;
+        if (y < -0.999f) y = -0.999f;
+
+        float rH = sqrtf(1.0f - y * y);
+        float x = cosf(phi) * rH;
+        float z = sinf(phi) * rH;
+
+        // Normalize unit direction vector u
+        float invLen = 1.0f / sqrtf(x * x + y * y + z * z);
+        float ux = x * invLen;
+        float uy = y * invLen;
+        float uz = z * invLen;
+
+        // Center of star on celestial sphere
+        float cx = ux * R;
+        float cy = uy * R;
+        float cz = uz * R;
+
+        // Orthonormal tangent basis (t1, t2) perpendicular to u
+        float t1x, t1y, t1z;
+        if (fabsf(uy) < 0.9f) {
+            float t1Len = sqrtf(uz * uz + ux * ux);
+            float invT1 = 1.0f / (t1Len > 0.0001f ? t1Len : 1.0f);
+            t1x = -uz * invT1;
+            t1y = 0.0f;
+            t1z = ux * invT1;
+        } else {
+            float t1Len = sqrtf(uy * uy + uz * uz);
+            float invT1 = 1.0f / (t1Len > 0.0001f ? t1Len : 1.0f);
+            t1x = 0.0f;
+            t1y = uz * invT1;
+            t1z = -uy * invT1;
+        }
+
+        // t2 = u x t1
+        float t2x = uy * t1z - uz * t1y;
+        float t2y = uz * t1x - ux * t1z;
+        float t2z = ux * t1y - uy * t1x;
+
+        // Star quad half-size in world units (4.0f to 8.2f)
+        float s = 4.0f + (float)((h >> 16) & 0x7) * 0.6f;
+
+        // d1 = s * t1, d2 = s * t2
+        float d1x = s * t1x, d1y = s * t1y, d1z = s * t1z;
+        float d2x = s * t2x, d2y = s * t2y, d2z = s * t2z;
+
+        // 4 vertices of the star quad facing the origin
+        float v0x = cx - d1x - d2x, v0y = cy - d1y - d2y, v0z = cz - d1z - d2z;
+        float v1x = cx - d1x + d2x, v1y = cy - d1y + d2y, v1z = cz - d1z + d2z;
+        float v2x = cx + d1x - d2x, v2y = cy + d1y - d2y, v2z = cz + d1z - d2z;
+        float v3x = cx + d1x + d2x, v3y = cy + d1y + d2y, v3z = cz + d1z + d2z;
+
+        // Color selection from palette
+        int colIdx = (h >> 20) & 0x7;
+        u8 cr = sStar3DColors[colIdx][0];
+        u8 cg = sStar3DColors[colIdx][1];
+        u8 cb = sStar3DColors[colIdx][2];
+
+        Vtx* vtx = &sStar3DVerts[i * 4];
+        vtx[0].v.ob[0] = (short)v0x; vtx[0].v.ob[1] = (short)v0y; vtx[0].v.ob[2] = (short)v0z;
+        vtx[0].v.flag = 0; vtx[0].v.tc[0] = 0; vtx[0].v.tc[1] = 0;
+        vtx[0].v.cn[0] = cr; vtx[0].v.cn[1] = cg; vtx[0].v.cn[2] = cb; vtx[0].v.cn[3] = 255;
+
+        vtx[1].v.ob[0] = (short)v1x; vtx[1].v.ob[1] = (short)v1y; vtx[1].v.ob[2] = (short)v1z;
+        vtx[1].v.flag = 0; vtx[1].v.tc[0] = 0; vtx[1].v.tc[1] = 0;
+        vtx[1].v.cn[0] = cr; vtx[1].v.cn[1] = cg; vtx[1].v.cn[2] = cb; vtx[1].v.cn[3] = 255;
+
+        vtx[2].v.ob[0] = (short)v2x; vtx[2].v.ob[1] = (short)v2y; vtx[2].v.ob[2] = (short)v2z;
+        vtx[2].v.flag = 0; vtx[2].v.tc[0] = 0; vtx[2].v.tc[1] = 0;
+        vtx[2].v.cn[0] = cr; vtx[2].v.cn[1] = cg; vtx[2].v.cn[2] = cb; vtx[2].v.cn[3] = 255;
+
+        vtx[3].v.ob[0] = (short)v3x; vtx[3].v.ob[1] = (short)v3y; vtx[3].v.ob[2] = (short)v3z;
+        vtx[3].v.flag = 0; vtx[3].v.tc[0] = 0; vtx[3].v.tc[1] = 0;
+        vtx[3].v.cn[0] = cr; vtx[3].v.cn[1] = cg; vtx[3].v.cn[2] = cb; vtx[3].v.cn[3] = 255;
+    }
+
+    // Build the static display list
+    Gfx* dl = sStar3DDL;
+    gSPDisplayList(dl++, star3DSetupDL);
+
+    for (int b = 0; b < STAR3D_BATCHES; b++) {
+        gSPVertex(dl++, &sStar3DVerts[b * (STAR3D_BATCH_SIZE * 4)], STAR3D_BATCH_SIZE * 4, 0);
+        for (int s = 0; s < STAR3D_BATCH_SIZE; s++) {
+            int v0 = s * 4;
+            gSP2Triangles(dl, v0, v0 + 1, v0 + 2, 0, v0 + 2, v0 + 1, v0 + 3, 0);
+            dl++;
+        }
+    }
+    gSPEndDisplayList(dl++);
+
+    sStar3DInitialized = true;
+}
+
+static void Background_DrawStarfieldVR(void) {
+    if (!sStar3DInitialized) {
+        Background_InitStarfield3D();
+    }
+
+    Vec3f lookDir;
+    Vec3f camUp;
+    if (gDrawMode == DRAW_ENDING) {
+        lookDir.x = gCsCamAtX - gCsCamEyeX;
+        lookDir.y = gCsCamAtY - gCsCamEyeY;
+        lookDir.z = gCsCamAtZ - gCsCamEyeZ;
+        camUp.x = 0.0f;
+        camUp.y = 100.0f;
+        camUp.z = 0.0f;
+    } else {
+        lookDir.x = gPlayCamAt.x - gPlayCamEye.x;
+        lookDir.y = gPlayCamAt.y - gPlayCamEye.y;
+        lookDir.z = gPlayCamAt.z - gPlayCamEye.z;
+        camUp = gPlayerCamUp;
+    }
+    float len = sqrtf(lookDir.x * lookDir.x + lookDir.y * lookDir.y + lookDir.z * lookDir.z);
+    if (len < 0.1f) {
+        lookDir.x = 0.0f;
+        lookDir.y = 0.0f;
+        lookDir.z = -1.0f;
+    }
+
+    float upLen = sqrtf(camUp.x * camUp.x + camUp.y * camUp.y + camUp.z * camUp.z);
+    if (upLen < 0.1f) {
+        camUp.x = 0.0f;
+        camUp.y = 100.0f;
+        camUp.z = 0.0f;
+    }
+
+    Matrix_Push(&gGfxMatrix);
+    Matrix_LookAt(gGfxMatrix, 0.0f, 0.0f, 0.0f, lookDir.x, lookDir.y, lookDir.z, camUp.x, camUp.y, camUp.z, MTXF_NEW);
+
+    if (gStarfieldScrollX != 0.0f || gStarfieldScrollY != 0.0f) {
+        Matrix_RotateY(gGfxMatrix, gStarfieldScrollX * 0.005f, MTXF_APPLY);
+        Matrix_RotateX(gGfxMatrix, gStarfieldScrollY * 0.005f, MTXF_APPLY);
+    }
+
+    FrameInterpolation_RecordOpenChild("Starfield3D", 0);
+    Matrix_SetGfxMtx(&gMasterDisp);
+    gSPDisplayList(gMasterDisp++, sStar3DDL);
+    FrameInterpolation_RecordCloseChild();
+
+    Matrix_Pop(&gGfxMatrix);
+    gDPPipeSync(gMasterDisp++);
+}
+
 // @port: Starfield drawn with triangles, re-engineered by @Tharo & @TheBoy181
 void Background_DrawStarfield(void) {
+    if (WindowIsVREnabled() && (gDrawMode == DRAW_PLAY || gDrawMode == DRAW_ENDING)) {
+        Background_DrawStarfieldVR();
+        return;
+    }
+
     f32 by;
     f32 bx;
     s32 i;

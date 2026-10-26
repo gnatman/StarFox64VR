@@ -59,3 +59,10 @@ src/cn/
 
 properties.h
 mods*/
+
+# Root scratch and build artifacts
+/*.py
+/*.patch
+/*.txt
+/*.obj
+/*.exe

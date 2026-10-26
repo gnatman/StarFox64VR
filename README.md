@@ -1,113 +1,90 @@
-[comment]: <> (Todo: Make Light Mode Image)
-[comment]: <> (Todo: Make Dark Mode Image)
- 
-# Starship
+# Star Fox 64 VR (Starship VR)
 
-Lead Developers: 
-* [SonicDcer](https://www.github.com/sonicdcer)
-* [Lywx](https://www.github.com/kiritodv)
+A modern PC port of **Star Fox 64** (based on HarbourMasters *Starship* and *libultraship*) transformed into a full **Virtual Reality motion simulator experience** with OpenXR stereo 6DOF rendering, first-person cockpit flight, HOTAS flight stick controls, and UDP motion simulator telemetry.
 
-## Website & Discord
+---
 
-Official Website: https://www.harbourmasters.org/
+## Key Features
 
-If you're having any trouble after reading through this `README`, feel free ask for help in the Starship Support text channels. Please keep in mind that we do not condone piracy.
+* **OpenXR Virtual Reality**:
+  * Native 6DOF head tracking and stereo rendering for Meta Quest, Valve Index, Bigscreen Beyond, HTC Vive, and Windows Mixed Reality headsets.
+  * Direct3D 11 rendering pipeline with high refresh rate support (72Hz, 80Hz, 90Hz, 120Hz).
+  * Desktop mirror window presentation for streaming or local display.
+* **First-Person Cockpit View**:
+  * Fly directly from inside the Arwing's cockpit with interactive physical head tracking across the canopy.
+  * Custom interior cockpit tub floor and rear bulkheads ([`Display_CockpitFloorVR`](file:///c:/Users/gnatm/Code/StarFox64VR/src/engine/fox_display.c)) to prevent see-through terrain below the craft.
+  * **All-Range Cockpit Mode**: Option to force first-person cockpit camera during 360° dogfights (Katina, Bolse, Sector Z, and boss battles).
+  * Adjustable cockpit dashboard distance, seat height, scale, canopy positioning, and glass glare/transparency slider (`gCockpitOpacity`).
+* **Virtual Cinema Screen & 2D HUD**:
+  * Title screen, main menu, opening story crawl, map / level select, and pause screens are projected onto a floating virtual cinema screen layer in 3D space, preventing motion sickness and eye fatigue.
+  * In-game HUD (shields, lasers, bombs, and radio dialog portraits) floats comfortably in the pilot's view with proper alpha accumulation.
+* **3D Celestial Starfield**:
+  * Replaces original 2D screen-space orthographic stars with a 3D celestial sphere (1,000 stars distributed via Fibonacci spiral at $R = 8,500$ units) in space levels (Meteo, Sector X/Y, Area 6).
+  * Stars render at true optical infinity with per-eye perspective and 6DOF head tracking, eliminating stereo divergence and double vision.
+* **Motion Simulator Telemetry & Motion Cueing Engine**:
+  * Broadcasts real-time UDP telemetry (port `20777`) compatible with **SimHub**, FlyPT, and motion platforms.
+  * Built-in **Motion Cueing Algorithm** tuned for 6DOF motion rigs (such as the **DOF Reality 6DOF P6**):
+    * **16.0° Rig Safety Limit**: Soft-knee hyperbolic curve and hard clamp protecting actuator travel limits.
+    * **Realistic Bank Washout**: Sustained banking washes out back to 50% of peak angle to prevent actuator saturation.
+    * **Barrel Roll Handling**: 360° spins are converted into an initial roll kick (6.0°) and lateral sway jolt (6.0 m/s²) instead of rolling the rig over.
+    * **Loop / Somersault Handling**: Continuous pitch loops translate into a steady pitch-up tilt (8.0°) and positive heave G-load (6.0 m/s²).
+    * **Yaw Leaky Washout & Slew Rate Limiting**: Prevents heading wind-up and limits angular velocities to avoid harsh jolts.
+* **HOTAS & Flight Stick Support**:
+  * Raw SDL2 joystick and throttle quadrant support (Thrustmaster TCA Airbus / T.16000M, Logitech X52 / X56, VKB, etc.).
+  * Automatic **zero-point neutral calibration fix**, eliminating unprompted pitch-down or yaw drift on commercial joysticks with biased center axes.
+  * Force feedback and haptic rumble for laser fire, bomb drops, damage impacts, and boost/brake resistance.
 
-# Quick Start
+---
 
-Starship does not include any copyrighted assets.  You are required to provide a supported copy of the game.
+## Documentation Guides
+
+* [**Virtual Reality Guide**](docs/VR.md): Detailed OpenXR setup, cockpit camera controls, canopy transparency, and 3D starfield architecture.
+* [**Motion Simulator & Telemetry Guide**](docs/MOTION_SIMULATOR.md): SimHub integration, UDP packet format, and Motion Cueing configuration for 6DOF rigs.
+* [**HOTAS & Flight Stick Guide**](docs/FLIGHT_STICK.md): Joystick mapping recommendations, neutral axis calibration, and force feedback setup.
+* [**Building Instructions**](docs/BUILDING.md): Compiling with `-DENABLE_VR=ON`, asset extraction, and packaging.
+
+---
+
+## Quick Start
+
+Star Fox 64 VR does not include copyrighted assets. You are required to provide a supported copy of the game.
 
 ### 1. Verify your ROM dump
-The supported ROMs are US 1.0 and US 1.1 Rev A versions. You can verify you have dumped a supported copy of the game by using the SHA-1 File Checksum Online at https://www.romhacking.net/hash/. 
+Supported ROMs are US 1.0 and US 1.1 Rev A versions. Verify using SHA-1:
+* **US 1.0**: `D8B1088520F7C5F81433292A9258C1184AFA1457`
+* **US 1.1**: `09F0D105F476B00EFA5303A3EBC42E60A7753B7A`
 
-* The SHA-1 hash for a US 1.0 ROM is D8B1088520F7C5F81433292A9258C1184AFA1457.
-* The SHA-1 hash for a US 1.1 ROM is 09F0D105F476B00EFA5303A3EBC42E60A7753B7A.
+*Note: Your ROM must be in `.z64` format.*
 
-Starship also supports voice language replacement use from both EU (Lylat) and JP (Japanese) when used in conjunction with an US ROM.
+### 2. Launching in VR
+1. Start your VR headset and connect via Meta Quest Link / AirLink / Virtual Desktop or SteamVR.
+2. Launch [`Starship.exe`](file:///c:/Users/gnatm/Code/StarFox64VR/Starship.exe).
+3. The game will automatically detect OpenXR and render directly into your headset.
 
-Note: JP and EU versions of the game are not supported for the base asset O2R creation, a US ROM must be used for it, and you can only use one voice language replacement at a time (Either EU or JP).
+---
 
-### 2. Verify your ROM is in .z64 format
-Your ROM needs to be in .z64 format. If it's in .n64 format, use the following to convert it to a .z64: https://hack64.net/tools/swapper.php
+## Configuration & In-Game Menu
 
-### 2. Download Starship from [Releases](https://github.com/HarbourMasters/Starship/releases)
+Press **F1** at any time to toggle the ImGui menu bar:
 
-### 3. Generating the OTR from the ROM and Play!
-#### Windows
-* Extract every file from the zip into a folder of your choosing.
-* Run starship.exe and select your US 1.0 or US 1.1 ROM.
+* **Settings -> VR Virtual Screen & HUD**: Adjust virtual 2D screen distance and size.
+* **Settings -> VR Cockpit View**: Adjust cockpit forward/back, height, scale, canopy glass opacity, and toggle All-Range Cockpit mode.
+* **Settings -> Telemetry**: Configure UDP port, rig safety limits (up to 16.0°), bank washout, barrel roll kick, loop heave, and monitor real-time motion cues.
+* **Controller -> Controller Settings**: Map HOTAS axes, buttons, deadzones, and calibrate stick neutral positions.
 
-#### Linux
-* Extract every file from the zip into a folder of your choosing.
-* Execute starship.appimage. You may have to chmod +x the appimage via terminal.
+### Default Shortcuts
+| Key | Action |
+| :--- | :--- |
+| **F1** | Toggle ImGui menu bar |
+| **F4** | Reset Game |
+| **F11** | Fullscreen Toggle |
+| **Tab** | Toggle Alternate Assets |
 
-#### MacOS
-* Extract every file from the zip into a folder of your choosing.
-* Run starship and select your US 1.0 or US 1.1 ROM.
+---
 
-#### Nintendo Switch
-* Run one of the PC releases to generate an `sf64.o2r` file. After launching the game on PC, you will be able to find these files in the same directory as `starship.exe` or `starship.appimage`.
-* Copy the files to your sd card
+## Special Thanks & Credits
 
-# Configuration
-
-### Default keyboard configuration
-| N64 | A | B | Z | Start | Analog stick | C buttons | D-Pad |
-| - | - | - | - | - | - | - | - |
-| Keyboard | X | C | Z | Space | WASD | Arrow keys | TFGH |
-
-### Other shortcuts
-| Keys | Action |
-| - | - |
-| F1 | Toggle menubar |
-| F4 | Reset |
-| F11 | Fullscreen |
-| Tab | Toggle Alternate assets |
-
-### Graphics Backends
-Currently, there are three rendering APIs supported: DirectX11 (Windows), OpenGL (all platforms), and Metal (macOS). You can change which API to use in the `Settings` menu of the menubar, which requires a restart.  If you're having an issue with crashing, you can change the API in the `starship.cfg.json` file by finding the line `"Backend":{`... and changing the `id` value to `3` and set the `Name` to `OpenGL`. `DirectX 11` with id `2` is the default on Windows. `Metal` with id `4` is the default on macOS.
-
-# Custom Assets
-Custom assets are packed in `.o2r` or `.otr` files. To use custom assets, place them in the `mods` folder.
-
-If you're interested in creating and/or packing your own custom asset `.o2r`/`.otr` files, check out the following tools:
-* [**retro - OTR and O2R generator**](https://github.com/HarbourMasters64/retro)
-* [**fast64 - Blender plugin (Note that SF64 is not supported at this time)**](https://github.com/HarbourMasters/fast64)
-
-# Development
-### Building
-
-If you want to manually compile Starship, please consult the [building instructions](https://github.com/HarbourMasters/Starship/blob/main/docs/BUILDING.md).
-
-### Playtesting
-If you want to playtest a continuous integration build, you can find them at the links below. Keep in mind that these are for playtesting only, and you will likely encounter bugs and possibly crashes. 
-
-* [Windows](https://nightly.link/HarbourMasters/Starship/workflows/main/main/starship-windows.zip)
-* [macOS](https://nightly.link/HarbourMasters/Starship/workflows/main/main/Starship-mac.zip)
-* [Linux](https://nightly.link/HarbourMasters/Starship/workflows/main/main/Starship-linux.zip)
-* [Switch](https://nightly.link/HarbourMasters/Starship/workflows/main/main/Starship-switch.zip)
-
-<a href="https://github.com/Kenix3/libultraship/">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./docs/poweredbylus.darkmode.png">
-    <img alt="Powered by libultraship" src="./docs/poweredbylus.lightmode.png">
-  </picture>
-</a>
-
-# Special Thanks:
-
-* [ZeldaRET](https://github.com/zeldaret) : for teaching me the fundamental knowledge of N64 decompilation.
-* [Decompals](https://github.com/decompals) : for helping in the initial disassembly and decompilation of the game.
-* [HM64 Team](https://github.com/harbourMasters) : for creating Libultraship and helping with various issues.
-
-* [DarioSamo](https://github.com/DarioSamo) : for providing important fixes to the renderer and information about the inner workings of the game graphics system.
-* [garrettjoecox](https://github.com/garrettjoecox) : for contributing with interpolation fixes to this port.
-* [inspectredc](https://github.com/inspectredc) : for contributing to the [SF64 decompilation project](https://github.com/sonicdcer/sf64).
-* [Lywx](https://github.com/KiritoDv) : for co-developing this port as a lead and creating [Torch](https://github.com/HarbourMasters/Torch) asset extraction system.
-* [m4xw](https://github.com/m4xw) : for helping with audio issues in this port.
-* [Malkierian](https://github.com/Malkierian) : for contributing with important fixes to this port.
-* [petrie911](https://github.com/petrie911) : for contributing to the [SF64 decompilation project](https://github.com/sonicdcer/sf64) as a lead.
-* [Ryan-Myers](https://github.com/Ryan-Myers) : for contributing to the [SF64 decompilation project](https://github.com/sonicdcer/sf64).
-* [Thar0](https://github.com/Thar0) : for contributing with an improved Starfield that can be interpolated to any framerate.
-* [TheBoy181](https://github.com/TheBoy181) : for contributing to this project with various widescreen enhancements such as level floors, an extended Starfield among other things.
-* [Wiseguy](https://github.com/Mr-Wiseguy) : for providing important information about the inner workings of the N64 platform, as well as helping with the decompilation process.
+* **HarbourMasters Team**: SonicDcer, Lywx, and the HM64 team for creating Starship and Libultraship.
+* **ZeldaRET & Decompals**: For the fundamental Star Fox 64 decompilation work.
+* **DarioSamo**: For graphics rendering expertise and renderer guidance.
+* **Thar0 & TheBoy181**: For widescreen enhancements and original starfield improvements.

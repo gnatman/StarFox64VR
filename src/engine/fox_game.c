@@ -6,6 +6,7 @@
 #include "port/interpolation/FrameInterpolation.h"
 #include "port/hooks/list/EngineEvent.h"
 #include "port/mods/PortEnhancements.h"
+#include "VRHudBridge.h"
 
 f32 gNextVsViewScale;
 f32 gVsViewScale;
@@ -274,31 +275,43 @@ void Game_Draw(s32 playerNum) {
         case DRAW_NONE:
             break;
         case DRAW_TITLE:
+            Ship_VR_EmitHudPassBegin(&gMasterDisp);
             Background_DrawStarfield();
             OvlMenu_CallFunction(OVLCALL_TITLE_DRAW, NULL);
+            Ship_VR_EmitHudPassEnd(&gMasterDisp);
             break;
         case DRAW_OPTION:
+            Ship_VR_EmitHudPassBegin(&gMasterDisp);
             Background_DrawStarfield();
             OvlMenu_CallFunction(OVLCALL_OPTION_DRAW, NULL);
+            Ship_VR_EmitHudPassEnd(&gMasterDisp);
             break;
         case DRAW_MAP:
+            Ship_VR_EmitHudPassBegin(&gMasterDisp);
             Background_DrawStarfield();
             OvlMenu_CallFunction(OVLCALL_MAP_DRAW, NULL);
+            Ship_VR_EmitHudPassEnd(&gMasterDisp);
             break;
         case DRAW_PLAY:
             gPlayerNum = playerNum;
             Display_Update();
             break;
         case DRAW_UNK_MAP: // likely game over
+            Ship_VR_EmitHudPassBegin(&gMasterDisp);
             Background_DrawStarfield();
             OvlMenu_CallFunction(OVLCALL_UNKMAP_DRAW, NULL);
+            Ship_VR_EmitHudPassEnd(&gMasterDisp);
             break;
         case DRAW_UNK_VS:
+            Ship_VR_EmitHudPassBegin(&gMasterDisp);
             func_versus_800C2190();
+            Ship_VR_EmitHudPassEnd(&gMasterDisp);
             break;
         case DRAW_UNK_7:
+            Ship_VR_EmitHudPassBegin(&gMasterDisp);
             gPlayerNum = playerNum;
             func_pause_800A3CA0();
+            Ship_VR_EmitHudPassEnd(&gMasterDisp);
             break;
         case DRAW_ENDING:
             Background_DrawStarfield();
@@ -382,9 +395,11 @@ void Game_Update(void) {
                 break;
 
             case GSTATE_SHOW_LOGO:
+                Ship_VR_EmitHudPassBegin(&gMasterDisp);
                 RCP_SetupDL(&gMasterDisp, SETUPDL_76_OPTIONAL);
                 gDPSetPrimColor(gMasterDisp++, 0x00, 0x00, 255, 255, 255, 255);
                 Lib_TextureRect_IA8(&gMasterDisp, gNintendoLogo, 128, 74, 100.0f, 86.0f, 1.0f, 1.0f);
+                Ship_VR_EmitHudPassEnd(&gMasterDisp);
                 gGameState++;
                 break;
 
@@ -402,9 +417,11 @@ void Game_Update(void) {
                 Timer_CreateTask(MSEC_TO_CYCLES(1000), Timer_Increment, (s32*) &gGameState, 1);
                 /* fallthrough */
             case GSTATE_LOGO_WAIT:
+                Ship_VR_EmitHudPassBegin(&gMasterDisp);
                 RCP_SetupDL(&gMasterDisp, SETUPDL_76_OPTIONAL);
                 gDPSetPrimColor(gMasterDisp++, 0x00, 0x00, 255, 255, 255, 255);
                 Lib_TextureRect_IA8(&gMasterDisp, gNintendoLogo, 128, 74, 100.0f, 86.0f, 1.0f, 1.0f);
+                Ship_VR_EmitHudPassEnd(&gMasterDisp);
                 break;
 
             case GSTATE_START:
@@ -566,6 +583,7 @@ void Game_Update(void) {
                                    gPlayerGlareReds[0], gPlayerGlareGreens[0], gPlayerGlareBlues[0],
                                    gPlayerGlareAlphas[0]);
             if ((gDrawMode == DRAW_PLAY) || (gDrawMode == DRAW_ENDING)) {
+                Ship_VR_EmitHudPassBegin(&gMasterDisp);
                 Radio_Draw();
                 if (gShowHud) {
                     HUD_Draw();
@@ -576,6 +594,7 @@ void Game_Update(void) {
                 CALL_CANCELLABLE_EVENT(DrawBossHealthHUDEvent) {
                     HUD_DrawBossHealth();
                 }
+                Ship_VR_EmitHudPassEnd(&gMasterDisp);
             }
         } else {
             for (i = 0; i < gCamCount; i++) {
@@ -594,12 +613,14 @@ void Game_Update(void) {
         }
 
         Background_dummy_80040CDC();
+        Ship_VR_EmitHudPassBegin(&gMasterDisp);
         HUD_DrawStatusScreens();
         AllRange_DrawCountdown();
 
         if ((gGameState == GSTATE_PLAY) && gVersusMode) {
             Versus_Draw();
         }
+        Ship_VR_EmitHudPassEnd(&gMasterDisp);
 
         Wipe_Draw(WIPE_CIRCULAR, gCircleWipeFrame);
 

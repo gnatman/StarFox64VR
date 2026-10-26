@@ -712,6 +712,42 @@ void Display_Unused(f32 arg0, f32 arg1, UNK_TYPE arg2, UNK_TYPE arg3) {
     /* Unimplemented. */
 }
 
+bool WindowIsVREnabled(void);
+Vec3f gPlayerCamUp = { 0.0f, 100.0f, 0.0f };
+
+static void Display_CockpitFloorVR(void) {
+    static Vtx sCockpitFloorVtx[8] = {
+        // Floor quad at Y = -5.0 (covering width X = -22 to 22, length Z = -18 to 30)
+        { { { -22, -5, -18 }, 0, { 0, 0 }, { 30, 32, 38, 255 } } }, // 0: Front-Left
+        { { {  22, -5, -18 }, 0, { 0, 0 }, { 30, 32, 38, 255 } } }, // 1: Front-Right
+        { { {  22, -5,  30 }, 0, { 0, 0 }, { 18, 20, 24, 255 } } }, // 2: Back-Right
+        { { { -22, -5,  30 }, 0, { 0, 0 }, { 18, 20, 24, 255 } } }, // 3: Back-Left
+        // Rear bulkhead top at Z = 30, Y = 18
+        { { { -22, 18,  30 }, 0, { 0, 0 }, { 22, 24, 28, 255 } } }, // 4: Top-Back-Left
+        { { {  22, 18,  30 }, 0, { 0, 0 }, { 22, 24, 28, 255 } } }, // 5: Top-Back-Right
+        // Side walls top edge at Y = 4
+        { { { -22,  4, -18 }, 0, { 0, 0 }, { 26, 28, 34, 255 } } }, // 6: Top-Front-Left
+        { { {  22,  4, -18 }, 0, { 0, 0 }, { 26, 28, 34, 255 } } }, // 7: Top-Front-Right
+    };
+
+    RCP_SetupDL_4();
+    gSPClearGeometryMode(gMasterDisp++, G_CULL_BACK);
+    gSPVertex(gMasterDisp++, sCockpitFloorVtx, 8, 0);
+    // Floor
+    gSP1Triangle(gMasterDisp++, 0, 1, 2, 0);
+    gSP1Triangle(gMasterDisp++, 0, 2, 3, 0);
+    // Rear bulkhead
+    gSP1Triangle(gMasterDisp++, 3, 2, 5, 0);
+    gSP1Triangle(gMasterDisp++, 3, 5, 4, 0);
+    // Left side tub wall
+    gSP1Triangle(gMasterDisp++, 0, 3, 4, 0);
+    gSP1Triangle(gMasterDisp++, 0, 4, 6, 0);
+    // Right side tub wall
+    gSP1Triangle(gMasterDisp++, 1, 5, 2, 0);
+    gSP1Triangle(gMasterDisp++, 1, 7, 5, 0);
+    gSPSetGeometryMode(gMasterDisp++, G_CULL_BACK);
+}
+
 void Display_CockpitGlass(void) {
     // @port: Tag the transform.
     FrameInterpolation_RecordOpenChild("Display_CockpitGlass", 0);
@@ -719,8 +755,19 @@ void Display_CockpitGlass(void) {
     Matrix_Push(&gGfxMatrix);
 
     Matrix_Copy(gGfxMatrix, &D_display_80161418[0]);
-    Matrix_Translate(gGfxMatrix, 0.0f, D_display_800CA290, D_display_800CA294, MTXF_APPLY);
-    Matrix_Scale(gGfxMatrix, D_display_800CA28C, D_display_800CA28C, D_display_800CA28C, MTXF_APPLY);
+
+    f32 transY = D_display_800CA290;
+    f32 transZ = D_display_800CA294;
+    f32 scale  = D_display_800CA28C;
+
+    if (WindowIsVREnabled()) {
+        transY = CVarGetFloat("gVRCanopyY", 13.0f);
+        transZ = CVarGetFloat("gVRCanopyZ", -18.0f);
+        scale  = CVarGetFloat("gVRCanopyScale", 2.0f);
+    }
+
+    Matrix_Translate(gGfxMatrix, 0.0f, transY, transZ, MTXF_APPLY);
+    Matrix_Scale(gGfxMatrix, scale, scale, scale, MTXF_APPLY);
     Matrix_SetGfxMtx(&gMasterDisp);
     RCP_SetupDL_64_2();
     u16 opacity = CVarGetInteger("gCockpitOpacity", 120);
@@ -751,15 +798,46 @@ void Display_Arwing(Player* player, s32 reflectY) {
         Matrix_MultVec3f(gGfxMatrix, &sp4C, &D_display_801613E0[1]);
     }
 
-    if (player->alternateView && (gLevelMode == LEVELMODE_ON_RAILS) &&
-        (fabsf(player->trueZpos + gPathProgress - player->cam.eye.z) < 10.0f)) {
+    bool isCockpit = false;
+    if (gLevelMode == LEVELMODE_ON_RAILS) {
+        if (player->alternateView && (fabsf(player->trueZpos + gPathProgress - player->cam.eye.z) < 10.0f)) {
+            isCockpit = true;
+        }
+    } else if (gLevelMode == LEVELMODE_ALL_RANGE) {
+        if (player->alternateView || (WindowIsVREnabled() && CVarGetInteger("gVRForceCockpitAllRange", 0))) {
+            isCockpit = true;
+        }
+    }
+
+    if (isCockpit) {
         if (reflectY == 0) {
             sDrawCockpit = true;
             Matrix_Push(&gGfxMatrix);
-            Matrix_Translate(gGfxMatrix, 0.0f, -8.0f, 5.0f, MTXF_APPLY);
+
+            f32 transX = 0.0f;
+            f32 transY = -8.0f;
+            f32 transZ = 5.0f;
+            f32 scale  = 1.0f;
+
+            if (WindowIsVREnabled()) {
+                transX = CVarGetFloat("gVRCockpitX", 0.0f);
+                transY = CVarGetFloat("gVRCockpitY", -4.0f);
+                transZ = CVarGetFloat("gVRCockpitZ", -8.0f);
+                scale  = CVarGetFloat("gVRCockpitScale", 1.25f);
+            }
+
+            Matrix_Translate(gGfxMatrix, transX, transY, transZ, MTXF_APPLY);
+            if (scale != 1.0f) {
+                Matrix_Scale(gGfxMatrix, scale, scale, scale, MTXF_APPLY);
+            }
             Matrix_RotateY(gGfxMatrix, M_PI, MTXF_APPLY);
             Matrix_SetGfxMtx(&gMasterDisp);
             gSPDisplayList(gMasterDisp++, aAwCockpitViewDL);
+
+            if (WindowIsVREnabled()) {
+                Display_CockpitFloorVR();
+            }
+
             Matrix_Pop(&gGfxMatrix);
         }
     } else {
@@ -1532,7 +1610,18 @@ void Display_Player_Update(Player* player, s32 reflectY) {
                 }
             }
 
-            if (!Display_CheckPlayerVisible(player->num, reflectY)) {
+            bool isCockpit = false;
+            if (gLevelMode == LEVELMODE_ON_RAILS) {
+                if (player->alternateView && (fabsf(player->trueZpos + gPathProgress - player->cam.eye.z) < 10.0f)) {
+                    isCockpit = true;
+                }
+            } else if (gLevelMode == LEVELMODE_ALL_RANGE) {
+                if (player->alternateView || (WindowIsVREnabled() && CVarGetInteger("gVRForceCockpitAllRange", 0))) {
+                    isCockpit = true;
+                }
+            }
+
+            if (!isCockpit && !Display_CheckPlayerVisible(player->num, reflectY)) {
                 Matrix_Pop(&gGfxMatrix);
                 return;
             }
@@ -1934,6 +2023,7 @@ void Display_Update(void) {
     tempVec.y = 100.0f;
     tempVec.z = 0.0f;
     Matrix_MultVec3f(gCalcMatrix, &tempVec, &playerCamUp);
+    gPlayerCamUp = playerCamUp;
     if (gStarCount != 0) {
         gStarfieldRoll = DEG_TO_RAD(gPlayer[0].camRoll);
         Camera_SetStarfieldPos(gPlayCamEye.x, gPlayCamEye.y, gPlayCamEye.z, gPlayCamAt.x, gPlayCamAt.y, gPlayCamAt.z);

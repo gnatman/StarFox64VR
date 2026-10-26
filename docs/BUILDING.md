@@ -27,23 +27,22 @@ _Note: Be sure to either clone with the ``--recursive`` flag or do ``git submodu
 _Note: Instructions assume using powershell_
 ```powershell
 # Navigate to the starship repo within powershell. ie: cd "C:\yourpath\starship"
-cd starship
+cd StarFox64VR
 
-# Setup cmake project
-# Add `-DCMAKE_BUILD_TYPE:STRING=Release` if you're packaging
-& 'C:\Program Files\CMake\bin\cmake' -S . -B "build/x64" -G "Visual Studio 17 2022" -T v143 -A x64
+# Setup cmake project (ENABLE_VR defaults to ON on Windows, automatically pulling openxr-loader via vcpkg)
+& 'C:\Program Files\CMake\bin\cmake' -S . -B "build/x64" -G "Visual Studio 17 2022" -T v143 -A x64 -DENABLE_VR=ON
 
-# Generate sf64.o2r
-& 'C:\Program Files\CMake\bin\cmake.exe' --build .\build\x64 --target ExtractAssets
+# Generate sf64.o2r asset archive
+& 'C:\Program Files\CMake\bin\cmake.exe' --build .\build\x64 --target ExtractAssets --config Release
 
-# Generate starship.o2r
-& 'C:\Program Files\CMake\bin\cmake.exe' --build .\build\x64 --target GeneratePortO2R
+# Generate starship.o2r port archive
+& 'C:\Program Files\CMake\bin\cmake.exe' --build .\build\x64 --target GeneratePortO2R --config Release
 
-# Compile project
-# Add `--config Release` if you're packaging
-& 'C:\Program Files\CMake\bin\cmake.exe' --build .\build\x64
+# Compile Star Fox 64 VR binary
+& 'C:\Program Files\CMake\bin\cmake.exe' --build .\build\x64 --config Release
 
-# Now you can run the executable in .\build\x64 or run in Visual Studio
+# Copy binary to root for direct execution
+Copy-Item .\build\x64\Release\Starship.exe .\Starship.exe
 ```
 
 ### Developing Starship

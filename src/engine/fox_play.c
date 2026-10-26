@@ -6323,6 +6323,49 @@ void Camera_UpdateCockpitOnRails(Player* player, s32 arg1) {
     }
 }
 
+bool WindowIsVREnabled(void);
+
+void Camera_UpdateCockpit360(Player* player, bool arg1) {
+    Vec3f forward;
+    Vec3f forwardRot;
+
+    f32 yaw = (player->yRot_114 + player->rot.y + player->damageShake) * M_DTOR;
+    f32 pitch = (player->xRot_120 + player->rot.x + player->aerobaticPitch + player->damageShake) * M_DTOR;
+
+    Matrix_RotateY(gCalcMatrix, yaw, MTXF_NEW);
+    Matrix_RotateX(gCalcMatrix, pitch, MTXF_APPLY);
+    forward.x = 0.0f;
+    forward.y = 0.0f;
+    forward.z = -1000.0f;
+    Matrix_MultVec3f(gCalcMatrix, &forward, &forwardRot);
+
+    f32 eyeX = player->pos.x;
+    f32 eyeY = player->pos.y + player->yBob;
+    f32 eyeZ = player->pos.z;
+    f32 atX = eyeX + forwardRot.x;
+    f32 atY = eyeY + forwardRot.y;
+    f32 atZ = eyeZ + forwardRot.z;
+
+    if (arg1 || (player->unk_014 >= 0.99f) || (WindowIsVREnabled() && CVarGetInteger("gVRForceCockpitAllRange", 0))) {
+        player->cam.eye.x = eyeX;
+        player->cam.eye.y = eyeY;
+        player->cam.eye.z = eyeZ;
+        player->cam.at.x = atX;
+        player->cam.at.y = atY;
+        player->cam.at.z = atZ;
+        player->unk_014 = 1.0f;
+    } else {
+        Math_SmoothStepToF(&player->cam.eye.x, eyeX, player->unk_014, 1000.0f, 0.0f);
+        Math_SmoothStepToF(&player->cam.eye.y, eyeY, player->unk_014, 1000.0f, 0.0f);
+        Math_SmoothStepToF(&player->cam.eye.z, eyeZ, player->unk_014, 1000.0f, 0.0f);
+        Math_SmoothStepToF(&player->cam.at.x, atX, player->unk_014, 1000.0f, 0.0f);
+        Math_SmoothStepToF(&player->cam.at.y, atY, player->unk_014, 1000.0f, 0.0f);
+        Math_SmoothStepToF(&player->cam.at.z, atZ, player->unk_014, 1000.0f, 0.0f);
+        Math_SmoothStepToF(&player->unk_014, 1.0f, 1.0f, 0.05f, 0.0f);
+    }
+    player->camRoll = -(player->bankAngle + player->rockAngle + player->damageShake);
+}
+
 void Camera_FollowPlayer(Player* player, s32 playerNum, bool arg2) {
     u8 i;
     u8 mask;
@@ -6656,7 +6699,11 @@ void Camera_Update360(Player* player, bool arg1) {
             Camera_UpdateTank360(player, arg1);
             break;
         case FORM_ARWING:
-            Camera_UpdateArwing360(player, arg1);
+            if (player->alternateView || (WindowIsVREnabled() && CVarGetInteger("gVRForceCockpitAllRange", 0))) {
+                Camera_UpdateCockpit360(player, arg1);
+            } else {
+                Camera_UpdateArwing360(player, arg1);
+            }
             break;
     }
 }
@@ -7085,7 +7132,9 @@ void Play_SetupZPos360(f32* zPos) {
     *zPos += gPathProgress + 15000.0f;
 }
 
+#include "port/TelemetryManager.h"
 void Play_Main(void) {
+    TelemetryManager_Update();
     s32 pad1;
     s32 pad2;
     s32 pad3;
